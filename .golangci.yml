@@ -1,0 +1,17 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+  settings:
+    staticcheck:
+      checks:
+        - all
+
+  exclusions:
+    rules:
+      - path: internal/domain/intercept/
+        linters: [bodyclose]
+      - path: internal/domain/rules/
+        linters: [bodyclose]

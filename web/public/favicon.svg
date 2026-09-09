@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!--
+    ihttp. A rounded frame with two arrows crossing it: traffic going
+    out and coming back through one point, which is what a proxy is.
+    A favicon renders outside the page, so the colours are stated and
+    the media query lifts them on a dark tab bar.
+  -->
+  <style>
+    .frame { stroke: #525252; }
+    .arrow { stroke: #0a0a0a; }
+    @media (prefers-color-scheme: dark) {
+      .frame { stroke: #a1a1a1; }
+      .arrow { stroke: #fafafa; }
+    }
+  </style>
+  <rect class="frame" x="4" y="4" width="24" height="24" rx="6" fill="none" stroke-width="2.4"/>
+  <path class="arrow" d="M9.5 12.5h12.5M18.5 9l3.5 3.5-3.5 3.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path class="arrow" d="M22.5 19.5H10M13.5 16 10 19.5l3.5 3.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

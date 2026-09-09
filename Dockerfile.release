@@ -1,0 +1,13 @@
+# Used by goreleaser, which has already built the binary and puts it in
+# the build context. The repository Dockerfile builds from source and
+# would compile a DIFFERENT binary from the artifact being released.
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates tzdata && adduser -D -H -u 1000 ihttp
+COPY ihttp /usr/local/bin/ihttp
+USER ihttp
+WORKDIR /data
+ENV IHTTP_DATA_DIR=/data IHTTP_ADDR=0.0.0.0:8081 IHTTP_PROXY_ADDR=0.0.0.0:8080
+EXPOSE 8080 8081
+VOLUME /data
+ENTRYPOINT ["ihttp"]
+CMD ["serve"]

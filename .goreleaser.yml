@@ -1,0 +1,107 @@
+version: 2
+
+project_name: ihttp
+
+# The console is EMBEDDED in the binary, so it has to exist before the
+# Go build runs. Skipping this does not fail - go:embed matches the
+# committed .gitkeep - it ships a release whose console explains that it
+# was not built.
+before:
+  hooks:
+    - go mod download
+    - sh -c 'cd web && npm ci && npm run build && touch dist/.gitkeep'
+
+release:
+  github:
+    owner: yousysadmin
+    name: ihttp
+  prerelease: auto
+
+env:
+  - CGO_ENABLED=0
+
+builds:
+  - id: ihttp
+    main: ./cmd/ihttp
+    binary: ihttp
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/yousysadmin/ihttp/pkg.Version={{ .Version }}
+
+archives:
+  - id: ihttp
+    ids: [ihttp]
+    name_template: >-
+      {{ .Binary }}_v{{ .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.sha256"
+
+snapshot:
+  version_template: "{{ .Version }}-devel"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# The tap is a separate repository, so the workflow token has to be a PAT
+# with write access to it - GITHUB_TOKEN is scoped to this repository.
+# A cask, not a formula: goreleaser deprecated `brews`. The binary is not
+# signed, so the hook drops the quarantine attribute Gatekeeper would
+# otherwise enforce on first run.
+homebrew_casks:
+  - ids: [ihttp]
+    repository:
+      owner: YouSysAdmin
+      name: homebrew-apps
+    directory: Casks
+    homepage: https://github.com/yousysadmin/ihttp
+    description: HTTP toolkit for security research
+    license: MIT
+    binaries: [ihttp]
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ihttp"]
+          end
+
+#dockers_v2:
+#  - ids: [ihttp]
+#    images:
+#      - ghcr.io/yousysadmin/ihttp
+#    tags:
+#      - "{{ .Version }}"
+#      - "{{ if not .Prerelease }}v{{ .Major }}.{{ .Minor }}{{ end }}"
+#      - "{{ if not .Prerelease }}latest{{ end }}"
+#    platforms:
+#      - linux/amd64
+#      - linux/arm64
+#    dockerfile: Dockerfile.release
+#    labels:
+#      org.opencontainers.image.title: ihttp
+#      org.opencontainers.image.description: HTTP toolkit for security research
+#      org.opencontainers.image.source: https://github.com/yousysadmin/ihttp
+#      org.opencontainers.image.version: "{{ .Version }}"
+#      org.opencontainers.image.revision: "{{ .FullCommit }}"
+#      org.opencontainers.image.created: "{{ .Date }}"

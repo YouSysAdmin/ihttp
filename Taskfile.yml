@@ -1,0 +1,109 @@
+# ihttp - run `task` with no arguments for the list. Install go-task
+# from https://taskfile.dev - every task below is plain sh.
+version: '3'
+
+vars:
+  VERSION:
+    sh: 'echo "${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo devel)}"'
+  LDFLAGS: '-s -w -X github.com/yousysadmin/ihttp/pkg.Version={{.VERSION}}'
+
+tasks:
+  default:
+    desc: List the tasks
+    silent: true
+    cmds:
+      - task --list
+
+  # SPA into web/dist, then the binary that embeds it. Sequential cmds
+  # rather than deps, because deps run in PARALLEL and the binary embeds
+  # what the step before it produces.
+  build:
+    desc: Console plus the binary (bin/ihttp)
+    cmds:
+      - task: web
+      - task: binary
+
+  # The build empties web/dist, which deletes the committed .gitkeep.
+  # That placeholder is what lets `go build` compile without a frontend
+  # build (go:embed needs a match), so put it back.
+  web:
+    desc: Build the console into web/dist
+    dir: web
+    cmds:
+      - npm ci
+      - npm run build
+      - touch dist/.gitkeep
+
+  binary:
+    desc: Build bin/ihttp from whatever is in web/dist
+    env:
+      CGO_ENABLED: '0'
+    cmds:
+      - go build -ldflags "{{.LDFLAGS}}" -o bin/ihttp ./cmd/ihttp
+
+  run:
+    desc: Run the proxy on :8080 and the console on :8081 with a dev data dir
+    env:
+      IHTTP_DATA_DIR: dev-data
+      IHTTP_LOG_LEVEL: debug
+    cmds:
+      - go run ./cmd/ihttp serve
+
+  # Vite on :5173 proxying /api to a running `task run`.
+  web-dev:
+    desc: Run the console with live reload
+    dir: web
+    cmds:
+      - npm run dev
+
+  test:
+    desc: Go tests
+    cmds:
+      - go test ./...
+
+  test-race:
+    desc: Go tests with the race detector
+    cmds:
+      - go test -race ./...
+
+  vet:
+    desc: go vet
+    cmds:
+      - go vet ./...
+
+  fmt:
+    desc: List unformatted Go files
+    cmds:
+      - gofmt -l internal cmd pkg web
+
+  lint:
+    desc: golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  type-check:
+    desc: vue-tsc over the console
+    dir: web
+    cmds:
+      - npm run type-check
+
+  format-check:
+    desc: prettier over the console (npm run format writes)
+    dir: web
+    cmds:
+      - npm run format-check
+
+  check:
+    desc: vet, lint, tests, gofmt, plus the console type-check and format
+    cmds:
+      - task: vet
+      - task: lint
+      - task: test
+      - task: fmt
+      - task: type-check
+      - task: format-check
+
+  docker:
+    desc: Build the container image
+    cmds:
+      - docker build --build-arg VERSION={{.VERSION}} -t ihttp:{{.VERSION}} .

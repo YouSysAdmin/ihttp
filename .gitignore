@@ -1,0 +1,19 @@
+# Build artifacts
+bin/
+/dist/
+web/dist/*
+!web/dist/.gitkeep
+web/node_modules/
+
+# Local data from `task run`
+/dev-data/
+/data/
+
+# OS and editor noise
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# Playwright MCP session files
+.playwright-mcp/
