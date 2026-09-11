@@ -96,8 +96,8 @@ itself what to trust.
 ### curl
 
 ```sh
-curl -x http://localhost:8080 https://example.com/
-curl -x http://localhost:8080 --cacert ~/.ihttp/ca.pem https://example.com/
+curl -x http://localhost:6080 https://example.com/
+curl -x http://localhost:6080 --cacert ~/.ihttp/ca.pem https://example.com/
 ```
 
 The `--cacert` form needs no trust store at all, which makes it the best
@@ -127,7 +127,7 @@ Node core has never read the proxy variables on its own. Node 24 added
 ```js
 import {ProxyAgent, setGlobalDispatcher} from 'undici'
 
-setGlobalDispatcher(new ProxyAgent('http://localhost:8080'))
+setGlobalDispatcher(new ProxyAgent('http://localhost:6080'))
 ```
 
 `NODE_EXTRA_CA_CERTS`, which `ihttp env` also sets, handles trust
@@ -154,7 +154,7 @@ traffic from a run configuration does not appear, look there first.
 
 ### Docker
 
-A container does not share the host's loopback, so `localhost:8080`
+A container does not share the host's loopback, so `localhost:6080`
 inside it is not the proxy:
 
 ```sh
@@ -171,7 +171,7 @@ and rewrite the proxy host to `host.docker.internal`. On Linux
 ### A tool with its own proxy field
 
 Postman, Insomnia and most API clients have a proxy setting of their own
-that overrides everything else. Point it at `http://localhost:8080` and
+that overrides everything else. Point it at `http://localhost:6080` and
 turn off their certificate verification, or trust the CA in the system
 store.
 
@@ -198,7 +198,7 @@ stream.
 By hand, the same thing:
 
 ```sh
-curl -x http://localhost:8080 http://ihttp.probe/v/anything
+curl -x http://localhost:6080 http://ihttp.probe/v/anything
 ```
 
 `ihttp.probe` is a host the proxy answers itself, so this needs no

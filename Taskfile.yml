@@ -42,7 +42,7 @@ tasks:
       - go build -ldflags "{{.LDFLAGS}}" -o bin/ihttp ./cmd/ihttp
 
   run:
-    desc: Run the proxy on :8080 and the console on :8081 with a dev data dir
+    desc: Run the proxy on :6080 and the console on :6081 with a dev data dir
     env:
       IHTTP_DATA_DIR: dev-data
       IHTTP_LOG_LEVEL: debug

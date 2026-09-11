@@ -27,7 +27,7 @@ It needs an ihttp already running. Without one, every tool says so in
 those words rather than reporting a connection error.
 
 ```sh
-ihttp mcp --addr 127.0.0.1:8081   # a different console
+ihttp mcp --addr 127.0.0.1:6081   # a different console
 ```
 
 ## Tools

@@ -6,8 +6,8 @@ RUN apk add --no-cache ca-certificates tzdata && adduser -D -H -u 1000 ihttp
 COPY ihttp /usr/local/bin/ihttp
 USER ihttp
 WORKDIR /data
-ENV IHTTP_DATA_DIR=/data IHTTP_ADDR=0.0.0.0:8081 IHTTP_PROXY_ADDR=0.0.0.0:8080
-EXPOSE 8080 8081
+ENV IHTTP_DATA_DIR=/data IHTTP_ADDR=0.0.0.0:6081 IHTTP_PROXY_ADDR=0.0.0.0:6080
+EXPOSE 6080 6081
 VOLUME /data
 ENTRYPOINT ["ihttp"]
 CMD ["serve"]

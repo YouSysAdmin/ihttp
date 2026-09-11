@@ -285,6 +285,6 @@ function hostPort(proxyURL: string): [string, string] {
 
     return [u.hostname || 'localhost', u.port || '80']
   } catch {
-    return ['localhost', '8080']
+    return ['localhost', '6080']
   }
 }

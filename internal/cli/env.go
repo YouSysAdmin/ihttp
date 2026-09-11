@@ -104,8 +104,8 @@ Routing is all this prepares; a runtime still decides for itself:
 
 	f := cmd.Flags()
 	f.StringVar(&shell, "shell", "", "sh, fish, powershell, cmd or env (default: from $SHELL)")
-	f.StringVar(&proxyURL, "proxy-url", "http://localhost:8080", "the running proxy")
-	f.StringVar(&addr, "addr", "127.0.0.1:8081", "the console's address, which is left unproxied")
+	f.StringVar(&proxyURL, "proxy-url", "http://localhost:6080", "the running proxy")
+	f.StringVar(&addr, "addr", "127.0.0.1:6081", "the console's address, which is left unproxied")
 	f.StringVar(&dataDir, "data-dir", defaultDataDir(), "where the CA lives")
 	f.StringVar(&caCert, "ca-cert", "", "CA certificate PEM (default <data-dir>/ca.pem)")
 	f.BoolVar(&unset, "unset", false, "print the lines that undo it instead")

@@ -67,8 +67,8 @@ func newBrowserCmd() *cobra.Command {
 	}
 
 	f := cmd.Flags()
-	f.StringVar(&proxyURL, "proxy-url", "http://localhost:8080", "the running proxy")
-	f.StringVar(&open, "open", "http://127.0.0.1:8081", "page to open, typically the console")
+	f.StringVar(&proxyURL, "proxy-url", "http://localhost:6080", "the running proxy")
+	f.StringVar(&open, "open", "http://127.0.0.1:6081", "page to open, typically the console")
 	f.StringVar(&dataDir, "data-dir", defaultDataDir(), "where the CA lives")
 	f.StringVar(&caCert, "ca-cert", "", "CA certificate PEM (default <data-dir>/ca.pem)")
 

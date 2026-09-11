@@ -38,8 +38,8 @@ Bodies are never logged, at any level.
 
 | Flag                    | Default          |                                                                                                               |
 |-------------------------|------------------|---------------------------------------------------------------------------------------------------------------|
-| `--proxy-addr`          | `:8080`          | where the proxy listens                                                                                       |
-| `--addr`                | `127.0.0.1:8081` | where the console and API listen                                                                              |
+| `--proxy-addr`          | `:6080`          | where the proxy listens                                                                                       |
+| `--addr`                | `127.0.0.1:6081` | where the console and API listen                                                                              |
 | `--data-dir`            | `~/.ihttp`       | database and CA key pair                                                                                      |
 | `--db`                  | in `--data-dir`  | database file, when it lives elsewhere                                                                        |
 | `--ca-cert`, `--ca-key` | in `--data-dir`  | the CA pair, when it lives elsewhere                                                                          |
@@ -84,8 +84,8 @@ ihttp browser chrome|firefox
 
 | Flag                      | Default                 |                                     |
 |---------------------------|-------------------------|-------------------------------------|
-| `--proxy-url`             | `http://localhost:8080` | the running proxy                   |
-| `--open`                  | `http://127.0.0.1:8081` | page to open, typically the console |
+| `--proxy-url`             | `http://localhost:6080` | the running proxy                   |
+| `--open`                  | `http://127.0.0.1:6081` | page to open, typically the console |
 | `--data-dir`, `--ca-cert` |                         | where the CA lives                  |
 
 Chromium-family means Chrome, Chromium, Edge or Brave - whichever is
@@ -96,8 +96,8 @@ found first.
 | Flag                      | Default                 |                                                             |
 |---------------------------|-------------------------|-------------------------------------------------------------|
 | `--shell`                 | from `$SHELL`           | `sh`, `fish`, `powershell`, `cmd` or `env`                  |
-| `--proxy-url`             | `http://localhost:8080` | the running proxy                                           |
-| `--addr`                  | `127.0.0.1:8081`        | the console, which is left unproxied                        |
+| `--proxy-url`             | `http://localhost:6080` | the running proxy                                           |
+| `--addr`                  | `127.0.0.1:6081`        | the console, which is left unproxied                        |
 | `--unset`                 | off                     | print the lines that undo it instead                        |
 | `--replace-ca-bundle`     | off                     | also set the variables that REPLACE a runtime's trust store |
 | `--data-dir`, `--ca-cert` |                         | where the CA lives                                          |
@@ -112,7 +112,7 @@ for what it sets and why some things are left alone.
 
 | Flag            | Default          |                                            |
 |-----------------|------------------|--------------------------------------------|
-| `--addr`        | `127.0.0.1:8081` | the console of the ihttp to serve          |
+| `--addr`        | `127.0.0.1:6081` | the console of the ihttp to serve          |
 | `--allow-write` | off              | also offer the tools that change something |
 | `--no-redact`   | off              | show credentials to the agent as captured  |
 
@@ -125,9 +125,9 @@ API is the whole product - the page has no privilege the API lacks. So
 scripting against it is a first-class way to use the tool:
 
 ```sh
-curl -s localhost:8081/api/info
-curl -sG localhost:8081/api/request-logs --data-urlencode 'search=res.statusCode >= 500'
-curl -s localhost:8081/api/request-logs/export.har -o capture.har
+curl -s localhost:6081/api/info
+curl -sG localhost:6081/api/request-logs --data-urlencode 'search=res.statusCode >= 500'
+curl -s localhost:6081/api/request-logs/export.har -o capture.har
 ```
 
 `GET /api/events` is a server-sent event stream of everything that

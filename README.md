@@ -21,7 +21,7 @@ brew install --cask yousysadmin/apps/ihttp
 
 ```sh
 # In the future :)
-docker run --rm -p 8080:8080 -p 8081:8081 -v ihttp:/data ghcr.io/yousysadmin/ihttp
+docker run --rm -p 6080:6080 -p 6081:6081 -v ihttp:/data ghcr.io/yousysadmin/ihttp
 ```
 
 or build from source:
@@ -33,7 +33,7 @@ bin/ihttp serve
 
 ## Getting started
 
-The proxy listens on `:8080` and the console on `http://127.0.0.1:8081`.
+The proxy listens on `:6080` and the console on `http://127.0.0.1:6081`.
 Point a browser or a tool at the proxy, open the console, create a project
 and open it - nothing is logged until one is.
 
@@ -91,8 +91,8 @@ Every flag is also an environment variable: `--proxy-addr` is
 
 | Flag                            | Default          |                                                                                                 |
 |---------------------------------|------------------|-------------------------------------------------------------------------------------------------|
-| `--proxy-addr`                  | `:8080`          | where the proxy listens                                                                         |
-| `--addr`                        | `127.0.0.1:8081` | where the console and API listen                                                                |
+| `--proxy-addr`                  | `:6080`          | where the proxy listens                                                                         |
+| `--addr`                        | `127.0.0.1:6081` | where the console and API listen                                                                |
 | `--data-dir`                    | `~/.ihttp`       | database and CA key pair                                                                        |
 | `--db`, `--ca-cert`, `--ca-key` | in `--data-dir`  | database file and CA pair, when they live elsewhere                                             |
 | `--max-body-mb`                 | `16`             | largest body kept for the log and intercept                                                     |
@@ -519,6 +519,6 @@ quietly every time it was used.
 
 ```sh
 task run        # proxy + API with a dev data dir
-task web-dev    # vite on :5173 proxying /api to :8081
+task web-dev    # vite on :5173 proxying /api to :6081
 task check      # vet, lint, tests, gofmt, vue-tsc, prettier
 ```

@@ -166,7 +166,7 @@ async function submit() {
 
     <FormField
       label="Keep at most"
-      hint="Entries. Past it the oldest go as new ones arrive, and saved entries are never dropped. Empty or 0 keeps everything, which is what an unbounded log did before. The count is checked every so often rather than per request, so the log can sit a little over the number."
+      hint="Entries. Past it the oldest go as new ones arrive, and saved entries are never dropped. Empty or 0 keeps everything, which is what an unbounded log did before."
     >
       <input
         v-model="draft.max_entries"

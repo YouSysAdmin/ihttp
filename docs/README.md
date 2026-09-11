@@ -5,8 +5,8 @@ research: a machine-in-the-middle proxy with a searchable request log,
 interception, rewrite rules, a request sender, request automation and
 per-project scope, behind a web console.
 
-Two listeners, on purpose. The **proxy** on `:8080` is what your clients
-point at. The **console** on `127.0.0.1:8081` is what you look at. They
+Two listeners, on purpose. The **proxy** on `:6080` is what your clients
+point at. The **console** on `127.0.0.1:6081` is what you look at. They
 are separate so a browser under test cannot reach the console by
 accident and the console is never in the traffic you are reading.
 

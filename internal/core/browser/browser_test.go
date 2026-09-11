@@ -6,7 +6,7 @@ import (
 )
 
 func TestFirefoxPrefs(t *testing.T) {
-	prefs, err := FirefoxPrefs("http://127.0.0.1:8080")
+	prefs, err := FirefoxPrefs("http://127.0.0.1:6080")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -14,8 +14,8 @@ func TestFirefoxPrefs(t *testing.T) {
 	for _, want := range []string{
 		`user_pref("network.proxy.type", 1);`,
 		`user_pref("network.proxy.http", "127.0.0.1");`,
-		`user_pref("network.proxy.http_port", 8080);`,
-		`user_pref("network.proxy.ssl_port", 8080);`,
+		`user_pref("network.proxy.http_port", 6080);`,
+		`user_pref("network.proxy.ssl_port", 6080);`,
 		`user_pref("security.enterprise_roots.enabled", true);`,
 		`user_pref("services.settings.server", "https://remote-settings.invalid/v1");`,
 		`user_pref("toolkit.telemetry.enabled", false);`,
@@ -47,7 +47,7 @@ func TestParseKind(t *testing.T) {
 }
 
 func TestChromeBypassIsExact(t *testing.T) {
-	args := chromeArgs("/p", Options{ProxyURL: "http://127.0.0.1:8080", OpenURL: "http://127.0.0.1:8081"})
+	args := chromeArgs("/p", Options{ProxyURL: "http://127.0.0.1:6080", OpenURL: "http://127.0.0.1:6081"})
 
 	var bypass string
 	for _, a := range args {
@@ -56,7 +56,7 @@ func TestChromeBypassIsExact(t *testing.T) {
 		}
 	}
 
-	if bypass != "<-loopback>;*.invalid;127.0.0.1:8081" {
+	if bypass != "<-loopback>;*.invalid;127.0.0.1:6081" {
 		t.Fatalf("bypass = %q", bypass)
 	}
 

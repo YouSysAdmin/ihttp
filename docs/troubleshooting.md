@@ -21,7 +21,7 @@ marked in the sidebar for exactly this reason.
 **Does the proxy work at all?**
 
 ```sh
-curl -x http://localhost:8080 'http://example.com/?probe=me'
+curl -x http://localhost:6080 'http://example.com/?probe=me'
 ```
 
 If that appears in the log, the proxy is fine and the problem is your

@@ -8,7 +8,7 @@ import (
 func TestEnvVarsCoverBothCasesAndLeaveTrustAlone(t *testing.T) {
 	t.Setenv("JAVA_TOOL_OPTIONS", "")
 
-	vars := envVars("http://127.0.0.1:8080", "127.0.0.1:8081", "/tmp/ca.pem", false)
+	vars := envVars("http://127.0.0.1:6080", "127.0.0.1:6081", "/tmp/ca.pem", false)
 
 	got := map[string]string{}
 	for _, v := range vars {
@@ -22,7 +22,7 @@ func TestEnvVarsCoverBothCasesAndLeaveTrustAlone(t *testing.T) {
 		}
 	}
 
-	if got["NO_PROXY"] != "127.0.0.1:8081" {
+	if got["NO_PROXY"] != "127.0.0.1:6081" {
 		t.Errorf("NO_PROXY = %q, want the console's host and port only", got["NO_PROXY"])
 	}
 
@@ -41,7 +41,7 @@ func TestEnvVarsCoverBothCasesAndLeaveTrustAlone(t *testing.T) {
 		}
 	}
 
-	with := envVars("http://127.0.0.1:8080", "127.0.0.1:8081", "/tmp/ca.pem", true)
+	with := envVars("http://127.0.0.1:6080", "127.0.0.1:6081", "/tmp/ca.pem", true)
 
 	found := false
 	for _, v := range with {
@@ -58,19 +58,19 @@ func TestEnvVarsCoverBothCasesAndLeaveTrustAlone(t *testing.T) {
 func TestJavaToolOptionsKeepsTheirsAndDoesNotStack(t *testing.T) {
 	t.Setenv("JAVA_TOOL_OPTIONS", "-Xmx512m -Dfoo=bar")
 
-	once := javaToolOptions("http://127.0.0.1:8080")
+	once := javaToolOptions("http://127.0.0.1:6080")
 	if !strings.HasPrefix(once, "-Xmx512m -Dfoo=bar ") {
 		t.Fatalf("their own options were lost: %q", once)
 	}
 
-	if !strings.Contains(once, "-Dhttp.proxyPort=8080") || !strings.Contains(once, "-Dhttps.proxyHost=127.0.0.1") {
+	if !strings.Contains(once, "-Dhttp.proxyPort=6080") || !strings.Contains(once, "-Dhttps.proxyHost=127.0.0.1") {
 		t.Fatalf("the proxy properties are missing: %q", once)
 	}
 
 	// Sourcing twice must not stack a second block.
 	t.Setenv("JAVA_TOOL_OPTIONS", once)
 
-	twice := javaToolOptions("http://127.0.0.1:8080")
+	twice := javaToolOptions("http://127.0.0.1:6080")
 	if twice != once {
 		t.Fatalf("re-running stacked:\n once: %q\ntwice: %q", once, twice)
 	}
@@ -83,18 +83,18 @@ func TestJavaToolOptionsKeepsTheirsAndDoesNotStack(t *testing.T) {
 	t.Setenv("JAVA_TOOL_OPTIONS", once)
 
 	moved := javaToolOptions("http://127.0.0.1:9999")
-	if strings.Contains(moved, "8080") || !strings.Contains(moved, "-Dhttp.proxyPort=9999") {
+	if strings.Contains(moved, "6080") || !strings.Contains(moved, "-Dhttp.proxyPort=9999") {
 		t.Fatalf("the old proxy survived: %q", moved)
 	}
 }
 
 func TestHostPort(t *testing.T) {
 	cases := []struct{ in, host, port string }{
-		{"http://localhost:8080", "localhost", "8080"},
-		{"http://127.0.0.1:8080/", "127.0.0.1", "8080"},
+		{"http://localhost:6080", "localhost", "6080"},
+		{"http://127.0.0.1:6080/", "127.0.0.1", "6080"},
 		{"http://proxy.example.com", "proxy.example.com", "80"},
-		{"localhost:8080", "localhost", "8080"},
-		{"http://[::1]:8080", "[::1]", "8080"},
+		{"localhost:6080", "localhost", "6080"},
+		{"http://[::1]:6080", "[::1]", "6080"},
 	}
 
 	for _, c := range cases {
@@ -108,14 +108,14 @@ func TestHostPort(t *testing.T) {
 func TestRenderEnvPerShell(t *testing.T) {
 	t.Setenv("JAVA_TOOL_OPTIONS", "")
 
-	vars := []envVar{{"HTTP_PROXY", "http://127.0.0.1:8080"}}
+	vars := []envVar{{"HTTP_PROXY", "http://127.0.0.1:6080"}}
 
 	cases := map[string]string{
-		"sh":         "export HTTP_PROXY='http://127.0.0.1:8080'",
-		"fish":       "set -gx HTTP_PROXY 'http://127.0.0.1:8080'",
-		"powershell": "$env:HTTP_PROXY = 'http://127.0.0.1:8080'",
-		"cmd":        "set HTTP_PROXY=http://127.0.0.1:8080",
-		"env":        "HTTP_PROXY=http://127.0.0.1:8080",
+		"sh":         "export HTTP_PROXY='http://127.0.0.1:6080'",
+		"fish":       "set -gx HTTP_PROXY 'http://127.0.0.1:6080'",
+		"powershell": "$env:HTTP_PROXY = 'http://127.0.0.1:6080'",
+		"cmd":        "set HTTP_PROXY=http://127.0.0.1:6080",
+		"env":        "HTTP_PROXY=http://127.0.0.1:6080",
 	}
 
 	for shell, want := range cases {

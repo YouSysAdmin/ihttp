@@ -73,7 +73,7 @@ works against an instance in a container or on another host.`,
 	}
 
 	f := cmd.Flags()
-	f.StringVar(&addr, "addr", "127.0.0.1:8081", "the console of the ihttp to serve")
+	f.StringVar(&addr, "addr", "127.0.0.1:6081", "the console of the ihttp to serve")
 	f.BoolVar(&allowWrite, "allow-write", false, "also offer the tools that change something")
 	f.BoolVar(&noRedact, "no-redact", false, "show credentials to the agent as captured")
 

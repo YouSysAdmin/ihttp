@@ -81,8 +81,8 @@ command line wins over the environment.`,
 	}
 
 	f := cmd.Flags()
-	f.StringVar(&o.proxyAddr, "proxy-addr", ":8080", "address the proxy listens on")
-	f.StringVar(&o.addr, "addr", "127.0.0.1:8081", "address the console and API listen on")
+	f.StringVar(&o.proxyAddr, "proxy-addr", ":6080", "address the proxy listens on")
+	f.StringVar(&o.addr, "addr", "127.0.0.1:6081", "address the console and API listen on")
 	f.StringVar(&o.dataDir, "data-dir", defaultDataDir(), "where the database and CA live")
 	f.StringVar(&o.dbPath, "db", "", "database file (default <data-dir>/ihttp.db)")
 	f.StringVar(&o.caCert, "ca-cert", "", "CA certificate PEM (default <data-dir>/ca.pem)")

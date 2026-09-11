@@ -31,9 +31,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // The API and the event stream come from `ihttp serve` on :8081.
+      // The API and the event stream come from `ihttp serve` on :6081.
       '/api': {
-        target: 'http://127.0.0.1:8081',
+        target: 'http://127.0.0.1:6081',
         changeOrigin: true,
       },
     },

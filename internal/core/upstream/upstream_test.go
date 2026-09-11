@@ -52,8 +52,8 @@ func TestBypassPatterns(t *testing.T) {
 		"https://a.b.example.com/":  "",
 		"http://host.local/":        "",
 		"http://localhost:3000/":    "",
-		"http://127.0.0.1:8081/api": "",
-		"http://[::1]:8081/api":     "",
+		"http://127.0.0.1:6081/api": "",
+		"http://[::1]:6081/api":     "",
 		// The port is not part of the match.
 		"https://api.internal:8443/x": "",
 		// Case is not either.
@@ -70,10 +70,10 @@ func TestBypassPatterns(t *testing.T) {
 // An empty configuration must leave the environment in charge, so an
 // instance that relied on HTTPS_PROXY keeps working.
 func TestNoConfigFallsBackToTheEnvironment(t *testing.T) {
-	t.Setenv("HTTPS_PROXY", "http://from-env:8080")
+	t.Setenv("HTTPS_PROXY", "http://from-env:6080")
 	t.Setenv("NO_PROXY", "")
 
-	if got := proxyFor(t, upstream.Config{}, "https://example.com/"); got != "http://from-env:8080" {
+	if got := proxyFor(t, upstream.Config{}, "https://example.com/"); got != "http://from-env:6080" {
 		t.Errorf("proxy = %q, want the environment's", got)
 	}
 }

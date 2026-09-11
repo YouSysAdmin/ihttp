@@ -22,8 +22,8 @@ bin/ihttp serve
 ihttp serve
 ```
 
-The proxy listens on `:8080` and the console on
-<http://127.0.0.1:8081>. The `info` line on startup says both.
+The proxy listens on `:6080` and the console on
+<http://127.0.0.1:6081>. The `info` line on startup says both.
 
 Open the console. **Nothing is logged until a project is open** - the
 proxy forwards regardless, but a project is what a log belongs to. Go to **Workspace > Projects**, create one, and open
@@ -62,7 +62,7 @@ reasonable habit, and the key never leaves `~/.ihttp`.
 The quickest honest check, with no browser or trust store involved:
 
 ```sh
-curl -x http://localhost:8080 http://example.com/
+curl -x http://localhost:6080 http://example.com/
 ```
 
 That request should appear in **Proxy > Request log** within a second.
@@ -72,7 +72,7 @@ real clients at it - see [Routing traffic in](clients.md).
 For HTTPS, once the CA is trusted:
 
 ```sh
-curl -x http://localhost:8080 https://example.com/
+curl -x http://localhost:6080 https://example.com/
 ```
 
 If that fails with a certificate error, the trust store step did not
