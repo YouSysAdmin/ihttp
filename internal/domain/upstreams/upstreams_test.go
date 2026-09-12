@@ -1,7 +1,9 @@
 package upstreams_test
 
 import (
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -366,4 +368,62 @@ func TestProjectUpstreamShapeIsChecked(t *testing.T) {
 		t.Errorf("a well-shaped unknown id was refused: %v", err)
 	}
 
+}
+
+// An override says where a host is, so it is reached directly even when
+// the project goes out through a proxy: asking a corporate proxy to
+// route to an address only this machine can see is how an override
+// would quietly stop working. Everything else still goes the long way.
+func TestAnOverriddenHostGoesDirect(t *testing.T) {
+	via := mockingProxy(t, "the-proxy")
+
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "the lab box")
+	}))
+	t.Cleanup(target.Close)
+
+	front := testutil.New(t, testutil.WithUpstreamDefault(upstreamcore.Config{URL: via.Proxy.URL}))
+	front.OpenProject(t, "hosts")
+
+	// api.example.invalid never resolves, so reaching the target at all
+	// proves the override was used, and reaching it DIRECTLY is what
+	// this test is about.
+	if _, err := front.Projects.UpdateSettings(t.Context(), func(set *projectmodels.Settings) error {
+		set.HostOverrides = []projectmodels.HostOverride{
+			{Host: "api.example.invalid", Address: target.Listener.Addr().String(), Enabled: true},
+		}
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := body(t, front, "http://api.example.invalid/"); got != "the lab box" {
+		t.Errorf("an overridden host answered %q, want the lab box - it went through the proxy", got)
+	}
+
+	// A host with no override is untouched and still goes out the
+	// configured way.
+	if got := body(t, front, "http://elsewhere.example.com/"); got != "the-proxy" {
+		t.Errorf("a host with no override answered %q, want the-proxy", got)
+	}
+}
+
+// body is one GET through the stack's proxy, read whole.
+func body(t *testing.T, s *testutil.Stack, url string) string {
+	t.Helper()
+
+	res, err := s.Client().Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() { _ = res.Body.Close() }()
+
+	out, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return strings.TrimSpace(string(out))
 }

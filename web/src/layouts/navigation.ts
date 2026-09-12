@@ -26,6 +26,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Request log', path: '/logs', icon: 'list', badge: 'log-paused' },
       { label: 'Intercept', path: '/intercept', icon: 'pause', badge: 'intercept' },
       { label: 'Rules', path: '/rules', icon: 'shuffle' },
+      { label: 'Hosts', path: '/hosts', icon: 'signpost' },
       { label: 'Scope', path: '/scope', icon: 'target' },
     ],
   },

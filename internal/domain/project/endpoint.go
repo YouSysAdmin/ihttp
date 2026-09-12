@@ -222,6 +222,36 @@ func (h Handler) PutNoDecrypt(w http.ResponseWriter, r *http.Request) error {
 	})
 }
 
+// PutHostOverrides handles PUT /api/project/settings/host-overrides:
+// where this project dials a name. A row with no host or no address is
+// dropped here rather than stored, since half an override is only ever
+// a half-finished edit.
+func (h Handler) PutHostOverrides(w http.ResponseWriter, r *http.Request) error {
+	var in HostOverridesRequest
+	if err := response.Decode(r, &in); err != nil {
+		return err
+	}
+
+	overrides := make([]project.HostOverride, 0, len(in.Overrides))
+
+	for _, o := range in.Overrides {
+		o.Host = strings.TrimSpace(o.Host)
+		o.Address = strings.TrimSpace(o.Address)
+
+		if o.Host == "" || o.Address == "" {
+			continue
+		}
+
+		overrides = append(overrides, o)
+	}
+
+	return h.update(w, r, func(s *project.Settings) error {
+		s.HostOverrides = overrides
+
+		return nil
+	})
+}
+
 func (h Handler) update(w http.ResponseWriter, r *http.Request, change func(*project.Settings) error) error {
 	p, err := h.Svc.UpdateSettings(r.Context(), change)
 	if err != nil {

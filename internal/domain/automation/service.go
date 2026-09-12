@@ -18,6 +18,7 @@ import (
 
 	"github.com/yousysadmin/ihttp/internal/core/clientcert"
 	"github.com/yousysadmin/ihttp/internal/core/eventbus"
+	"github.com/yousysadmin/ihttp/internal/core/hostmap"
 	"github.com/yousysadmin/ihttp/internal/core/httpmsg"
 	"github.com/yousysadmin/ihttp/internal/core/ids"
 	"github.com/yousysadmin/ihttp/internal/domain/project"
@@ -37,6 +38,12 @@ type Service struct {
 
 	h2 http.RoundTripper
 	h1 http.RoundTripper
+
+	// The transports behind h2 and h1, and the per-host clones of them,
+	// kept so their idle connections can be dropped when the host
+	// overrides change.
+	transports []*http.Transport
+	certs      *clientcert.Keeper
 
 	timeout time.Duration
 	maxBody int64
@@ -75,6 +82,11 @@ type Options struct {
 	// certificate, so a run reaches an mTLS service. Nil presents none.
 	ClientCerts *clientcert.Keeper
 
+	// HostOverrides is where a name is dialled, so a run reaches the
+	// machine the proxied original reached and speaks to it the same
+	// way. Nil overrides nothing.
+	HostOverrides func() *hostmap.Map
+
 	// Logger takes what a run cannot report to a caller, such as a result
 	// that would not store. Nil means the default logger.
 	Logger *slog.Logger
@@ -96,21 +108,36 @@ func NewService(store *Store, projects *project.Service, logs *reqlog.Service, b
 		opts.Logger = slog.Default()
 	}
 
-	h2t, h1t := sender.NewTransports(opts.InsecureSkipVerify, opts.UpstreamProxy)
-	h2, h1 := opts.ClientCerts.Wrap(h2t), opts.ClientCerts.Wrap(h1t)
+	h2t, h1t := sender.NewTransports(opts.InsecureSkipVerify, opts.UpstreamProxy, opts.HostOverrides)
+	h2 := hostmap.WrapTransport(opts.ClientCerts.Wrap(h2t), opts.HostOverrides)
+	h1 := hostmap.WrapTransport(opts.ClientCerts.Wrap(h1t), opts.HostOverrides)
 
 	return &Service{
-		store:    store,
-		projects: projects,
-		logs:     logs,
-		bus:      bus,
-		log:      opts.Logger,
-		h2:       h2,
-		h1:       h1,
-		timeout:  opts.Timeout,
-		maxBody:  opts.MaxBody,
-		running:  map[string]*run{},
+		store:      store,
+		projects:   projects,
+		logs:       logs,
+		bus:        bus,
+		log:        opts.Logger,
+		h2:         h2,
+		h1:         h1,
+		transports: []*http.Transport{h2t, h1t},
+		certs:      opts.ClientCerts,
+		timeout:    opts.Timeout,
+		maxBody:    opts.MaxBody,
+		running:    map[string]*run{},
 	}
+}
+
+// CloseIdleConnections drops the pooled connections. The pool is keyed
+// by the host a request named and not by the address that was dialled
+// for it, so a changed host override would otherwise be ignored for as
+// long as an idle socket to the old address lived.
+func (s *Service) CloseIdleConnections() {
+	for _, tr := range s.transports {
+		tr.CloseIdleConnections()
+	}
+
+	s.certs.CloseIdleConnections()
 }
 
 // List returns the open project's jobs, newest first, narrowed by a

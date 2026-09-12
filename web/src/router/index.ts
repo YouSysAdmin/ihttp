@@ -40,6 +40,12 @@ const routes = [
         meta: { title: 'Rules' },
       },
       {
+        path: 'hosts',
+        name: 'hosts',
+        component: () => import('../views/proxy/Hosts.vue'),
+        meta: { title: 'Host overrides' },
+      },
+      {
         path: 'decoder',
         name: 'decoder',
         component: () => import('../views/tools/Decoder.vue'),

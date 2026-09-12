@@ -134,7 +134,10 @@ func (p *Proxy) dialTunnelUpstream(r *http.Request) (net.Conn, error) {
 	}
 
 	if via == nil {
-		return d.DialContext(r.Context(), "tcp", r.Host)
+		// Overridden here too: a host we do not decrypt still has to be
+		// reachable where the operator said it lives, or an override
+		// would work everywhere except on the hosts left alone.
+		return d.DialContext(r.Context(), "tcp", p.dialAddr(r.Host))
 	}
 
 	// A SOCKS upstream would need its own handshake. Rather than

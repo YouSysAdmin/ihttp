@@ -27,6 +27,7 @@ import (
 
 	"github.com/yousysadmin/ihttp/internal/core/certgen"
 	"github.com/yousysadmin/ihttp/internal/core/clientcert"
+	"github.com/yousysadmin/ihttp/internal/core/hostmap"
 	"github.com/yousysadmin/ihttp/internal/core/httpmsg"
 	"github.com/yousysadmin/ihttp/internal/core/ids"
 )
@@ -147,6 +148,18 @@ type Options struct {
 	// the host from the CONNECT line, port stripped.
 	Passthrough func(host string) bool
 
+	// HostOverrides is where a name is dialled: a hosts file for the
+	// proxy. The Host header, the SNI and the certificate check all come
+	// from the URL, which is untouched, so only the TCP target moves and
+	// the target sees the request it would have seen - unless the
+	// override named a scheme, which also decides whether the hop to it
+	// is TLS.
+	//
+	// A provider rather than a list, so the map can come from the open
+	// project without this package importing a domain, and so an edit
+	// takes effect on the next request. Nil overrides nothing.
+	HostOverrides func() *hostmap.Map
+
 	// ProbeHost is a host the proxy answers itself, so a setup can be
 	// checked without a network and without a real target. Zero means
 	// DefaultProbeHost. The answer is injected the way a rule's mock is,
@@ -188,6 +201,13 @@ type Proxy struct {
 	probeHost     string
 	passthrough   func(string) bool
 	upstreamProxy func(*http.Request) (*url.URL, error)
+	hostOverrides func() *hostmap.Map
+
+	// transport is the base upstream transport and certs holds the
+	// per-host clones of it, both kept so their idle connections can be
+	// dropped when the overrides change.
+	transport *http.Transport
+	certs     *clientcert.Keeper
 }
 
 // New builds a Proxy that issues certificates from ca and runs hooks.
@@ -208,6 +228,14 @@ func New(ca *certgen.Authority, hooks []Hook, opts Options) *Proxy {
 		upstreamProxy = http.ProxyFromEnvironment
 	}
 
+	// Defaulted here for the same reason: both dial paths and the
+	// transport read it, and none should have to ask whether there is
+	// one. A nil *Map matches nothing, so this is the whole of it.
+	hostOverrides := opts.HostOverrides
+	if hostOverrides == nil {
+		hostOverrides = func() *hostmap.Map { return nil }
+	}
+
 	p := &Proxy{
 		ca:               ca,
 		hooks:            hooks,
@@ -217,6 +245,7 @@ func New(ca *certgen.Authority, hooks []Hook, opts Options) *Proxy {
 		probeHost:        firstNonEmptyHost(opts.ProbeHost, DefaultProbeHost),
 		passthrough:      opts.Passthrough,
 		upstreamProxy:    upstreamProxy,
+		hostOverrides:    hostOverrides,
 		tlsConfig:        ca.TLSConfig(),
 		protocols:        new(http.Protocols),
 	}
@@ -230,12 +259,16 @@ func New(ca *certgen.Authority, hooks []Hook, opts Options) *Proxy {
 
 	p.landing = newLanding(ca, opts.ConsoleURL)
 
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
 	upstream := &http.Transport{
 		Proxy: upstreamProxy,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return dialer.DialContext(ctx, network, p.dialAddr(addr))
+		},
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
@@ -250,14 +283,44 @@ func New(ca *certgen.Authority, hooks []Hook, opts Options) *Proxy {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: opts.InsecureSkipVerify}, //nolint:gosec // Operator's choice, see Options.
 	}
 
+	p.transport = upstream
+	p.certs = opts.ClientCerts
+
 	p.rp = &httputil.ReverseProxy{
-		Transport:    &hookedTransport{p: p, next: opts.ClientCerts.Wrap(upstream)},
+		// The scheme switch goes INSIDE the hooks, so a request sent to
+		// a plain dev server is still logged as the https the client
+		// asked for.
+		Transport:    &hookedTransport{p: p, next: hostmap.WrapTransport(opts.ClientCerts.Wrap(upstream), hostOverrides)},
 		Rewrite:      rewrite,
 		ErrorHandler: p.errorHandler,
 		ErrorLog:     slog.NewLogLogger(opts.Logger.Handler(), slog.LevelDebug),
 	}
 
 	return p
+}
+
+// dialAddr applies the host overrides to an address about to be dialled
+// and says which one was taken. Logged, because "it reached the wrong
+// machine" is otherwise the hardest thing here to see: nothing in the
+// request, the log or the certificate changes when an override fires.
+func (p *Proxy) dialAddr(addr string) string {
+	to := p.hostOverrides().Addr(addr)
+	if to == "" || to == addr {
+		return addr
+	}
+
+	p.log.Debug("proxy: host override", "addr", addr, "dialled", to)
+
+	return to
+}
+
+// CloseIdleConnections drops the pooled upstream connections. The pool
+// is keyed by the host a request named and NOT by the address that was
+// dialled for it, so an override that changed would otherwise be
+// ignored for as long as an idle socket to the old address lived.
+func (p *Proxy) CloseIdleConnections() {
+	p.transport.CloseIdleConnections()
+	p.certs.CloseIdleConnections()
 }
 
 // ServeHTTP implements http.Handler. A CONNECT opens a tunnel, an

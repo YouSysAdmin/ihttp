@@ -54,3 +54,9 @@ type NoDecryptRequest struct {
 type UpstreamRequest struct {
 	Upstream string `json:"upstream"`
 }
+
+// HostOverridesRequest is the body of PUT
+// /api/project/settings/host-overrides: where names are dialled.
+type HostOverridesRequest struct {
+	Overrides []project.HostOverride `json:"overrides"`
+}

@@ -1,5 +1,6 @@
 import api from './client'
 import type {
+  HostOverride,
   InterceptSettings,
   Project,
   RequestLogSettings,
@@ -45,4 +46,6 @@ export const projectsApi = {
   // picks one from the list.
   putUpstream: (upstream: string) =>
     api.put<{ settings: Settings }>('/project/settings/upstream', { upstream }),
+  putHostOverrides: (overrides: HostOverride[]) =>
+    api.put<{ settings: Settings }>('/project/settings/host-overrides', { overrides }),
 }

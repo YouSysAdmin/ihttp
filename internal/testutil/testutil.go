@@ -167,10 +167,16 @@ func New(t *testing.T, opts ...Option) *Stack {
 	}
 
 	upstreamProxy := ways.ProxyFunc()
+	hostOverrides := projects.HostOverridesProvider()
 	logStore := reqlog.NewStore(db, blobs)
 	logs := reqlog.NewService(logStore, projects, bus, log)
 	interceptor := intercept.NewService(projects, bus, log)
-	sopts := sender.Options{InsecureSkipVerify: true, UpstreamProxy: upstreamProxy, ClientCerts: o.certs}
+	sopts := sender.Options{
+		InsecureSkipVerify: true,
+		UpstreamProxy:      upstreamProxy,
+		HostOverrides:      hostOverrides,
+		ClientCerts:        o.certs,
+	}
 	if o.sender != nil {
 		o.sender(&sopts)
 	}
@@ -179,6 +185,7 @@ func New(t *testing.T, opts ...Option) *Stack {
 	automating := automation.NewService(automation.NewStore(db), projects, logs, bus, automation.Options{
 		InsecureSkipVerify: true,
 		UpstreamProxy:      sopts.UpstreamProxy,
+		HostOverrides:      sopts.HostOverrides,
 		ClientCerts:        o.certs,
 		Logger:             log,
 	})
@@ -192,6 +199,7 @@ func New(t *testing.T, opts ...Option) *Stack {
 		MaxBody:            1 << 20,
 		InsecureSkipVerify: true,
 		UpstreamProxy:      upstreamProxy,
+		HostOverrides:      hostOverrides,
 		ClientCerts:        o.certs,
 		Passthrough:        projects.PassthroughProvider(),
 	}
@@ -202,6 +210,14 @@ func New(t *testing.T, opts ...Option) *Stack {
 	mitm := proxy.New(ca, []proxy.Hook{ruleHook, interceptor, logs}, popts)
 	proxySrv := httptest.NewServer(mitm)
 	t.Cleanup(proxySrv.Close)
+
+	// The same watcher serve.go installs: a pooled connection remembers
+	// the name, not the address it was dialled at.
+	projects.Watch(func(_, _ *project.Active) {
+		mitm.CloseIdleConnections()
+		sending.CloseIdleConnections()
+		automating.CloseIdleConnections()
+	})
 
 	transferring := transfer.NewService(db, projects, log)
 	schemas := protoschema.NewService(protoschema.NewStore(db), projects)

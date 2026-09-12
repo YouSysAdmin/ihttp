@@ -237,6 +237,14 @@ func (s *Service) Test(ctx context.Context, id, target string) (upstream.Result,
 // reusing one to the wrong proxy.
 func (s *Service) ProxyFunc() func(*http.Request) (*url.URL, error) {
 	return func(req *http.Request) (*url.URL, error) {
+		// A host with an override is one we have been TOLD where to
+		// find, so it is reached directly: asking a corporate proxy to
+		// route to an address only this machine can see is how an
+		// override would quietly stop working.
+		if a := s.projects.Active(); a != nil && req.URL != nil && a.HostOverrides.Has(req.URL.Hostname()) {
+			return nil, nil
+		}
+
 		return s.resolve()(req)
 	}
 }

@@ -228,6 +228,22 @@ func (s *switcher) RoundTrip(req *http.Request) (*http.Response, error) {
 	return s.keeper.transportFor(s.base, req.URL.Hostname(), cert).RoundTrip(req)
 }
 
+// CloseIdleConnections drops the pooled connections of every per-host
+// transport this keeper built. The bases are closed by whoever owns
+// them; these clones are only reachable from here.
+func (k *Keeper) CloseIdleConnections() {
+	if k == nil {
+		return
+	}
+
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	for _, tr := range k.transports {
+		tr.CloseIdleConnections()
+	}
+}
+
 // transportFor is base with one certificate added, built once per host
 // and kept, so connections to it are pooled like any other.
 func (k *Keeper) transportFor(base *http.Transport, host string, cert *tls.Certificate) *http.Transport {

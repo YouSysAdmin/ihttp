@@ -151,6 +151,21 @@ export interface Settings {
   // absent to inherit the instance default, UPSTREAM_DIRECT to go out
   // on our own, or the id of one in the list.
   upstream?: string
+  // Where a name is dialled. First match wins.
+  host_overrides?: HostOverride[]
+}
+
+// HostOverride moves where a host is REACHED and nothing else: the Host
+// header, the SNI and the certificate check all come from the URL, so
+// the target sees the request it would have seen.
+export interface HostOverride {
+  // A host glob, the same shape no_decrypt takes. No port.
+  host: string
+  // An IP, optionally with a port, and optionally behind http:// or
+  // https:// to decide whether the hop to it is TLS. Without a port the
+  // request's own is kept; without a scheme, the client's.
+  address: string
+  enabled: boolean
 }
 
 export interface Project {

@@ -14,6 +14,7 @@ import (
 	"github.com/yousysadmin/ihttp/internal/core/clientcert"
 	"github.com/yousysadmin/ihttp/internal/core/eventbus"
 	"github.com/yousysadmin/ihttp/internal/core/filter"
+	"github.com/yousysadmin/ihttp/internal/core/hostmap"
 	"github.com/yousysadmin/ihttp/internal/core/httpmsg"
 	"github.com/yousysadmin/ihttp/internal/core/ids"
 	"github.com/yousysadmin/ihttp/internal/domain/project"
@@ -33,6 +34,12 @@ type Service struct {
 
 	h2 http.RoundTripper
 	h1 http.RoundTripper
+
+	// The transports behind h2 and h1, and the per-host clones of them,
+	// kept so their idle connections can be dropped when the host
+	// overrides change.
+	transports []*http.Transport
+	certs      *clientcert.Keeper
 
 	timeout time.Duration
 	maxBody int64
@@ -60,6 +67,11 @@ type Options struct {
 	// proxied original did. Nil presents none.
 	ClientCerts *clientcert.Keeper
 
+	// HostOverrides is where a name is dialled, so a replay reaches the
+	// machine the proxied original reached and speaks to it the same
+	// way. Nil overrides nothing.
+	HostOverrides func() *hostmap.Map
+
 	// Logger gets one debug line per send. Nil means the default.
 	Logger *slog.Logger
 }
@@ -68,21 +80,38 @@ type Options struct {
 // one that offers h2 and one that speaks HTTP/1 only, for a request that
 // names its protocol. Compression is off so the body is read as sent.
 //
-// upstreamProxy is the same one the MITM uses, so a replayed request
-// leaves the machine the way the proxied original did. Nil is
-// http.ProxyFromEnvironment.
-func NewTransports(insecure bool, upstreamProxy func(*http.Request) (*url.URL, error)) (h2, h1 *http.Transport) {
+// upstreamProxy and hostOverride are the same ones the MITM uses, so a
+// replayed request leaves the machine the way the proxied original did
+// and reaches the same place. Nil is http.ProxyFromEnvironment and no
+// overrides.
+func NewTransports(insecure bool, upstreamProxy func(*http.Request) (*url.URL, error),
+	hostOverrides func() *hostmap.Map,
+) (h2, h1 *http.Transport) {
 	if upstreamProxy == nil {
 		upstreamProxy = http.ProxyFromEnvironment
 	}
 
+	if hostOverrides == nil {
+		hostOverrides = func() *hostmap.Map { return nil }
+	}
+
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
+	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if to := hostOverrides().Addr(addr); to != "" {
+			addr = to
+		}
+
+		return dialer.DialContext(ctx, network, addr)
+	}
+
 	base := func() *http.Transport {
 		return &http.Transport{
-			Proxy: upstreamProxy,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
+			Proxy:                 upstreamProxy,
+			DialContext:           dial,
 			MaxIdleConns:          100,
 			MaxIdleConnsPerHost:   100,
 			IdleConnTimeout:       90 * time.Second,
@@ -117,20 +146,35 @@ func NewService(store *Store, projects *project.Service, logs *reqlog.Service, b
 		opts.Logger = slog.Default()
 	}
 
-	h2t, h1t := NewTransports(opts.InsecureSkipVerify, opts.UpstreamProxy)
-	h2, h1 := opts.ClientCerts.Wrap(h2t), opts.ClientCerts.Wrap(h1t)
+	h2t, h1t := NewTransports(opts.InsecureSkipVerify, opts.UpstreamProxy, opts.HostOverrides)
+	h2 := hostmap.WrapTransport(opts.ClientCerts.Wrap(h2t), opts.HostOverrides)
+	h1 := hostmap.WrapTransport(opts.ClientCerts.Wrap(h1t), opts.HostOverrides)
 
 	return &Service{
-		store:    store,
-		projects: projects,
-		logs:     logs,
-		bus:      bus,
-		log:      opts.Logger,
-		h2:       h2,
-		h1:       h1,
-		timeout:  opts.Timeout,
-		maxBody:  opts.MaxBody,
+		store:      store,
+		projects:   projects,
+		logs:       logs,
+		bus:        bus,
+		log:        opts.Logger,
+		h2:         h2,
+		h1:         h1,
+		transports: []*http.Transport{h2t, h1t},
+		certs:      opts.ClientCerts,
+		timeout:    opts.Timeout,
+		maxBody:    opts.MaxBody,
 	}
+}
+
+// CloseIdleConnections drops the pooled connections. The pool is keyed
+// by the host a request named and not by the address that was dialled
+// for it, so a changed host override would otherwise be ignored for as
+// long as an idle socket to the old address lived.
+func (s *Service) CloseIdleConnections() {
+	for _, tr := range s.transports {
+		tr.CloseIdleConnections()
+	}
+
+	s.certs.CloseIdleConnections()
 }
 
 // List returns the open project's history, newest first, narrowed by

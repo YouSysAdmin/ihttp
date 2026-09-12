@@ -243,16 +243,23 @@ func runServe(ctx context.Context, o serveOptions) error {
 
 	upstreamProxy := ways.ProxyFunc()
 
+	// Where a name is dialled, asked of the open project on every
+	// connection, so a hosts entry takes effect the way the way out
+	// does: on the next request, with no restart.
+	hostOverrides := projects.HostOverridesProvider()
+
 	sending := sender.NewService(sender.NewStore(db), projects, logs, bus, sender.Options{
 		MaxBody:            int64(o.maxBodyMB) << 20,
 		InsecureSkipVerify: o.insecure,
 		UpstreamProxy:      upstreamProxy,
+		HostOverrides:      hostOverrides,
 		ClientCerts:        clientCerts,
 		Logger:             log.With("svc", "sender"),
 	})
 	automating := automation.NewService(automation.NewStore(db), projects, logs, bus, automation.Options{
 		InsecureSkipVerify: o.insecure,
 		UpstreamProxy:      upstreamProxy,
+		HostOverrides:      hostOverrides,
 		ClientCerts:        clientCerts,
 		Logger:             log.With("svc", "automation"),
 	})
@@ -283,9 +290,20 @@ func runServe(ctx context.Context, o serveOptions) error {
 
 		KeepWebSocketExtensions: o.wsExtLive,
 		UpstreamProxy:           upstreamProxy,
+		HostOverrides:           hostOverrides,
 		ClientCerts:             clientCerts,
 		Passthrough:             projects.PassthroughProvider(),
 		Logger:                  log.With("svc", "proxy"),
+	})
+
+	// An override changes where a name is dialled, and a pooled
+	// connection remembers only the name. Dropping the idle ones is what
+	// makes an edited or switched override take effect on the next
+	// request rather than in ninety seconds.
+	projects.Watch(func(_, _ *project.Active) {
+		mitm.CloseIdleConnections()
+		sending.CloseIdleConnections()
+		automating.CloseIdleConnections()
 	})
 
 	proxySrv := &http.Server{

@@ -195,3 +195,87 @@ func TestEntryCapIsValidated(t *testing.T) {
 		}
 	}
 }
+
+// Host overrides are validated where every other setting is: a bad
+// address or a bad glob is refused before it is stored, and a refusal
+// leaves what was there alone. Getting this wrong would mean a project
+// that opens with an override the dialler cannot read.
+func TestHostOverridesAreValidated(t *testing.T) {
+	stack := testutil.New(t)
+	stack.OpenProject(t, "hosts")
+	ctx := t.Context()
+
+	set := func(overrides []models.HostOverride) error {
+		_, err := stack.Projects.UpdateSettings(ctx, func(s *models.Settings) error {
+			s.HostOverrides = overrides
+
+			return nil
+		})
+
+		return err
+	}
+
+	good := []models.HostOverride{
+		{Host: "api.example.com", Address: "10.0.0.5", Enabled: true},
+		{Host: "wiki.example.com", Address: "http://127.0.0.1:3000", Enabled: true},
+		{Host: "*.test.local", Address: "127.0.0.1:8443", Enabled: true},
+		{Host: "v6.example.com", Address: "[::1]:8443", Enabled: true},
+	}
+
+	if err := set(good); err != nil {
+		t.Fatalf("a good set of overrides was refused: %v", err)
+	}
+
+	if got := stack.Projects.Active().HostOverrides.Addr("api.example.com:443"); got != "10.0.0.5:443" {
+		t.Fatalf("the compiled map answered %q", got)
+	}
+
+	bad := map[string][]models.HostOverride{
+		"a name on the right":  {{Host: "api.example.com", Address: "staging.internal", Enabled: true}},
+		"a URL with a path":    {{Host: "api.example.com", Address: "http://10.0.0.5/api", Enabled: true}},
+		"nothing on the right": {{Host: "api.example.com", Address: "", Enabled: true}},
+		"a broken glob":        {{Host: "api.[example.com", Address: "10.0.0.5", Enabled: true}},
+	}
+
+	for what, overrides := range bad {
+		if err := set(overrides); err == nil {
+			t.Errorf("%s was accepted", what)
+		}
+	}
+
+	if got := stack.Projects.Active().Project.Settings.HostOverrides; len(got) != 4 {
+		t.Fatalf("a refused update changed the stored overrides: %+v", got)
+	}
+
+	// A disabled row is kept but not compiled, so turning one off does
+	// not mean retyping the address.
+	if err := set([]models.HostOverride{{Host: "api.example.com", Address: "10.0.0.5"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if stack.Projects.Active().HostOverrides.Len() != 0 {
+		t.Error("a disabled override was compiled")
+	}
+
+	if got := stack.Projects.Active().Project.Settings.HostOverrides; len(got) != 1 {
+		t.Errorf("a disabled override was not kept: %+v", got)
+	}
+
+	// A disabled row is not compiled, so it is not validated either:
+	// turning a half-typed override off has to be a way out of it, not
+	// another refusal.
+	if err := set([]models.HostOverride{{Host: "api.example.com", Address: "not-an-address"}}); err != nil {
+		t.Errorf("a disabled override with a bad address was refused: %v", err)
+	}
+
+	// More than the cap is refused, enabled or not: it is a hosts file
+	// for one engagement, not a zone.
+	many := make([]models.HostOverride, models.MaxHostOverrides+1)
+	for i := range many {
+		many[i] = models.HostOverride{Host: fmt.Sprintf("h%d.example.com", i), Address: "10.0.0.5", Enabled: true}
+	}
+
+	if err := set(many); err == nil {
+		t.Errorf("%d overrides were accepted, the cap is %d", len(many), models.MaxHostOverrides)
+	}
+}

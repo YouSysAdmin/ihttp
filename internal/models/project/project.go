@@ -46,7 +46,38 @@ type Settings struct {
 	// project with. An id that means nothing on another machine falls
 	// back to that machine's default.
 	Upstream string `json:"upstream,omitempty"`
+
+	// HostOverrides are the hosts this project dials somewhere of the
+	// operator's choosing: a hosts file for the proxy, so a lab address
+	// does not have to go into dnsmasq on every machine a client runs
+	// on. First match wins, so a specific entry above a wildcard sends
+	// one host in a domain elsewhere.
+	HostOverrides []HostOverride `json:"host_overrides,omitempty"`
 }
+
+// HostOverride moves where a host is REACHED and nothing else. The Host
+// header, the SNI and the certificate check all come from the URL,
+// which is untouched, so the target sees exactly the request it would
+// have seen - which is what makes this different from a rewrite_url
+// rule, where the name moves with the connection and the server knows.
+type HostOverride struct {
+	// Host is a host glob, the same shape NoDecrypt and the upstream
+	// bypass list take: api.example.com, *.example.com. No port.
+	Host string `json:"host"`
+
+	// Address is where it is dialled: an IP, optionally with a port.
+	// 10.0.0.5 keeps the port the request asked for, 10.0.0.5:8443
+	// replaces that too.
+	Address string `json:"address"`
+
+	// Enabled off keeps an override without applying it, so a target can
+	// be compared against the real host without retyping the address.
+	Enabled bool `json:"enabled"`
+}
+
+// MaxHostOverrides bounds the list. A hosts file for one engagement,
+// not a zone.
+const MaxHostOverrides = 200
 
 // UpstreamDirect is the Settings.Upstream value that means "out on our
 // own", as against an empty value, which means "whatever the instance

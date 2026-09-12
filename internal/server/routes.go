@@ -44,6 +44,7 @@ func registerRoutes(mux *http.ServeMux, d Deps) {
 	mux.Handle("PUT /api/project/settings/upstream", h(p.PutUpstream))
 	mux.Handle("PUT /api/project/settings/rules", h(p.PutRules))
 	mux.Handle("PUT /api/project/settings/no-decrypt", h(p.PutNoDecrypt))
+	mux.Handle("PUT /api/project/settings/host-overrides", h(p.PutHostOverrides))
 
 	// Captured values: runtime state of the rules hook, not a setting.
 	if d.Rules != nil {

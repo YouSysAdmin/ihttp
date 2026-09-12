@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/yousysadmin/ihttp/internal/core/eventbus"
 	"github.com/yousysadmin/ihttp/internal/core/filter"
+	"github.com/yousysadmin/ihttp/internal/core/hostmap"
 	"github.com/yousysadmin/ihttp/internal/core/ids"
 	"github.com/yousysadmin/ihttp/internal/domain/rules"
 	"github.com/yousysadmin/ihttp/internal/domain/scope"
@@ -46,6 +46,11 @@ type Active struct {
 	// Muted says a host is hidden from the log VIEW, nil when the list
 	// is empty. Nothing about what is written reads it.
 	Muted func(host string) bool
+
+	// HostOverrides is where a name is dialled, nil when the list is
+	// empty. Asked with the address a dialler was about to use, so it
+	// can keep the port the request asked for.
+	HostOverrides *hostmap.Map
 }
 
 // Watcher is told when the active project changes. prev or next is nil
@@ -387,10 +392,10 @@ func (s *Service) notify(prev, next *Active) {
 	}
 }
 
-// hostGlob compiles a list of hosts into one matcher. Host globs, the
-// same shape the upstream-proxy bypass list takes, so there is one
-// syntax for "these hosts" in the product. The caller names the list in
-// its own error, since there is more than one of them.
+// hostGlob compiles a list of hosts into one matcher over hostmap's
+// glob, so there is one syntax for "these hosts" in the product. The
+// caller names the list in its own error, since there is more than one
+// of them.
 func hostGlob(patterns []string) (func(host string) bool, error) {
 	cleaned := make([]string, 0, len(patterns))
 
@@ -400,8 +405,8 @@ func hostGlob(patterns []string) (func(host string) bool, error) {
 			continue
 		}
 
-		if _, err := path.Match(pattern, "probe"); err != nil {
-			return nil, fmt.Errorf("%q is not a host pattern: %w", raw, err)
+		if err := hostmap.CheckPattern(pattern); err != nil {
+			return nil, err
 		}
 
 		cleaned = append(cleaned, pattern)
@@ -412,20 +417,8 @@ func hostGlob(patterns []string) (func(host string) bool, error) {
 	}
 
 	return func(host string) bool {
-		host = strings.ToLower(strings.Trim(host, "[]"))
-		if host == "" {
-			return false
-		}
-
 		for _, pattern := range cleaned {
-			if pattern == host {
-				return true
-			}
-
-			// path.Match's separator is /, which a host never has, so a
-			// * spans the whole name: *.example.com matches
-			// a.b.example.com as well as a.example.com.
-			if ok, _ := path.Match(pattern, host); ok {
+			if hostmap.MatchHost(pattern, host) {
 				return true
 			}
 		}
@@ -486,6 +479,11 @@ func Compile(p project.Project) (*Active, error) {
 		return nil, fmt.Errorf("muted hosts: %w", err)
 	}
 
+	overrides, err := compileHostOverrides(p.Settings.HostOverrides)
+	if err != nil {
+		return nil, fmt.Errorf("host overrides: %w", err)
+	}
+
 	// The list lives in another domain, so whether the id EXISTS is
 	// resolved when a request goes out - a project imported from another
 	// machine may name one this one has never had. The shape is
@@ -509,7 +507,29 @@ func Compile(p project.Project) (*Active, error) {
 		Rules:             compiledRules,
 		NoDecrypt:         noDecrypt,
 		Muted:             muted,
+		HostOverrides:     overrides,
 	}, nil
+}
+
+// compileHostOverrides turns the settings list into the map the dialler
+// asks. A disabled override is dropped here rather than checked on
+// every connection, so what is compiled is what is in force.
+func compileHostOverrides(list []project.HostOverride) (*hostmap.Map, error) {
+	if len(list) > project.MaxHostOverrides {
+		return nil, fmt.Errorf("%d overrides is more than the %d this holds", len(list), project.MaxHostOverrides)
+	}
+
+	entries := make([]hostmap.Entry, 0, len(list))
+
+	for _, o := range list {
+		if !o.Enabled {
+			continue
+		}
+
+		entries = append(entries, hostmap.Entry{Host: o.Host, Address: o.Address})
+	}
+
+	return hostmap.Compile(entries)
 }
 
 // PassthroughProvider is what the proxy asks at CONNECT time: whether
@@ -523,6 +543,19 @@ func (s *Service) PassthroughProvider() func(host string) bool {
 		}
 
 		return a.NoDecrypt(host)
+	}
+}
+
+// HostOverridesProvider is the open project's compiled overrides, or
+// nil. Read per connection rather than held, so an edit takes effect on
+// the next one.
+func (s *Service) HostOverridesProvider() func() *hostmap.Map {
+	return func() *hostmap.Map {
+		if a := s.Active(); a != nil {
+			return a.HostOverrides
+		}
+
+		return nil
 	}
 }
 
