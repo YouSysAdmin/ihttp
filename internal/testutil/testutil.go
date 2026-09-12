@@ -24,6 +24,7 @@ import (
 	upstreamcore "github.com/yousysadmin/ihttp/internal/core/upstream"
 	"github.com/yousysadmin/ihttp/internal/database"
 	"github.com/yousysadmin/ihttp/internal/domain/automation"
+	"github.com/yousysadmin/ihttp/internal/domain/instance"
 	"github.com/yousysadmin/ihttp/internal/domain/intercept"
 	"github.com/yousysadmin/ihttp/internal/domain/project"
 	"github.com/yousysadmin/ihttp/internal/domain/protoschema"
@@ -46,6 +47,7 @@ type Stack struct {
 	Transfer   *transfer.Service
 	Schemas    *protoschema.Service
 	Upstreams  *upstreams.Service
+	Instance   *instance.Service
 	Bus        *eventbus.Bus
 	CA         *certgen.Authority
 
@@ -203,17 +205,18 @@ func New(t *testing.T, opts ...Option) *Stack {
 
 	transferring := transfer.NewService(db, projects, log)
 	schemas := protoschema.NewService(protoschema.NewStore(db), projects)
+	settings := instance.NewService(instance.NewStore(db), log)
 
 	consoleSrv := httptest.NewServer(server.New("", server.Deps{
 		Projects: projects, ReqLogs: logs, Intercept: interceptor, Sender: sending, Automation: automating,
-		Transfer: transferring, Schemas: schemas, Upstreams: ways, Rules: ruleHook,
+		Transfer: transferring, Schemas: schemas, Upstreams: ways, Instance: settings, Rules: ruleHook,
 		CA: ca, Bus: bus, Logger: log,
 	}).Handler)
 	t.Cleanup(consoleSrv.Close)
 
 	return &Stack{
 		Projects: projects, ReqLogs: logs, Intercept: interceptor, Sender: sending, Automation: automating,
-		Transfer: transferring, Schemas: schemas, Upstreams: ways, Bus: bus, CA: ca,
+		Transfer: transferring, Schemas: schemas, Upstreams: ways, Instance: settings, Bus: bus, CA: ca,
 		Proxy: proxySrv, Console: consoleSrv, DB: db, LogStore: logStore, BodyDir: bodyDir,
 		Rules: ruleHook,
 	}

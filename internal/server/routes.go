@@ -5,6 +5,7 @@ import (
 
 	"github.com/yousysadmin/ihttp/internal/core/response"
 	"github.com/yousysadmin/ihttp/internal/domain/automation"
+	"github.com/yousysadmin/ihttp/internal/domain/instance"
 	"github.com/yousysadmin/ihttp/internal/domain/intercept"
 	"github.com/yousysadmin/ihttp/internal/domain/project"
 	"github.com/yousysadmin/ihttp/internal/domain/protoschema"
@@ -50,6 +51,11 @@ func registerRoutes(mux *http.ServeMux, d Deps) {
 		mux.Handle("GET /api/rules/variables", h(rl.Variables))
 		mux.Handle("DELETE /api/rules/variables", h(rl.Clear))
 	}
+
+	// The instance's own settings, as against a project's.
+	in := instance.Handler{Svc: d.Instance}
+	mux.Handle("GET /api/settings", h(in.Settings))
+	mux.Handle("PUT /api/settings/auth-headers", h(in.PutAuthHeaders))
 
 	u := upstreams.Handler{Svc: d.Upstreams}
 	mux.Handle("GET /api/upstreams", h(u.List))

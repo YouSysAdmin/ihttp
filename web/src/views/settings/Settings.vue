@@ -1,20 +1,36 @@
 <script setup lang="ts">
-// Settings: what this instance is - the proxy address, the certificate.
-// Project settings live where they act: intercept filters on the
-// Intercept page, scope rules on the Scope page.
+// Settings: what this instance is - the proxy address, the certificate,
+// and the few choices that hold whichever project is open. Project
+// settings live where they act: intercept filters on the Intercept page,
+// scope rules on the Scope page.
 import { onMounted, ref } from 'vue'
 import { infoApi } from '../../api/info'
 import { apiErrorMessage } from '../../api/client'
 import type { Info } from '../../api/types'
 import { useNotificationStore } from '../../stores/notification'
+import { useSettingsStore } from '../../stores/settings'
 import { formatDate } from '../../composables/formatDate'
+import { AUTH_HEADER_NAMES } from '../../composables/auth'
 import PageHeader from '../../components/PageHeader.vue'
 import CopyButton from '../../components/CopyButton.vue'
 import Notice from '../../components/Notice.vue'
+import FormField from '../../components/FormField.vue'
 
 const notify = useNotificationStore()
+const settings = useSettingsStore()
 
 const info = ref<Info | null>(null)
+
+// The names every message is read for already, shown so nobody adds one
+// that is on the list.
+const builtIn = AUTH_HEADER_NAMES
+
+// The extra auth header names, edited as text: one name per line is the
+// shape of the thing, and a row editor for a list of bare words is more
+// machinery than the list is worth.
+const authText = ref('')
+const authError = ref('')
+const saving = ref(false)
 
 onMounted(async () => {
   try {
@@ -22,7 +38,29 @@ onMounted(async () => {
   } catch (e) {
     notify.error(apiErrorMessage(e, 'Failed to load instance info'))
   }
+
+  try {
+    await settings.fetchAll()
+    authText.value = settings.authHeaders.join('\n')
+  } catch (e) {
+    notify.error(apiErrorMessage(e, 'Failed to load settings'))
+  }
 })
+
+async function saveAuthHeaders() {
+  authError.value = ''
+  saving.value = true
+
+  try {
+    await settings.saveAuthHeaders(authText.value.split('\n'))
+    authText.value = settings.authHeaders.join('\n')
+    notify.success('Auth headers saved')
+  } catch (e) {
+    authError.value = apiErrorMessage(e, 'Failed to save the header names')
+  } finally {
+    saving.value = false
+  }
+}
 </script>
 
 <template>
@@ -134,6 +172,48 @@ onMounted(async () => {
           None configured, so no client certificate is ever presented. An upstream that requires one
           refuses the handshake, which reaches the client as a 502.
         </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Auth headers</h2>
+        <span class="header-sub m-0"
+          >What the Auth tab of a message reads as carrying a credential.</span
+        >
+      </div>
+      <div class="card-body">
+        <p class="text-sm text-muted mb-2">
+          These are read as credentials in every message already, along with every cookie:
+        </p>
+        <div class="auth-known-list">
+          <code v-for="n in builtIn" :key="n" class="auth-known">{{ n }}</code>
+        </div>
+        <p class="text-sm text-muted mb-3">
+          Name your own below - a house header like <code>X-Acme-Token</code> - and it is read the
+          same way. Matching ignores case, and nothing here decides what is captured: it only
+          decides what the Auth tab gathers.
+        </p>
+        <FormField
+          label="Extra header names"
+          for="auth-headers"
+          hint="One per line."
+          :error="authError"
+        >
+          <textarea
+            id="auth-headers"
+            v-model="authText"
+            class="form-textarea"
+            rows="4"
+            spellcheck="false"
+            placeholder="X-Acme-Token"
+          ></textarea>
+        </FormField>
+        <div class="flex gap-2">
+          <button type="button" class="btn btn-primary" :disabled="saving" @click="saveAuthHeaders">
+            {{ saving ? 'Saving...' : 'Save' }}
+          </button>
+        </div>
       </div>
     </div>
 

@@ -1191,11 +1191,9 @@ kbd {
   white-space: nowrap;
 }
 
-/* Cookies under the headers table they came from. */
-.cookie-block {
-  margin-top: 16px;
-}
-.cookie-title {
+/* The Auth tab of a message: the credential headers, then the cookies,
+   each table under its own heading. */
+.auth-title {
   margin: 0 0 6px;
   font-size: 11px;
   font-weight: 600;
@@ -1203,8 +1201,29 @@ kbd {
   text-transform: uppercase;
   color: var(--text-muted);
 }
-.cookie-block .table-wrapper + .cookie-title {
+.auth-block .table-wrapper + .auth-title {
   margin-top: 16px;
+}
+/* The built-in auth header names, listed on the Settings page. They
+   wrap as a row of chips: one long line of them would push the page
+   sideways. */
+.auth-known-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-bottom: 12px;
+}
+.auth-known {
+  white-space: nowrap;
+}
+.auth-scheme {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 .cookie-attrs {
   display: flex;

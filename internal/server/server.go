@@ -17,6 +17,7 @@ import (
 	"github.com/yousysadmin/ihttp/internal/core/eventbus"
 	"github.com/yousysadmin/ihttp/internal/core/response"
 	"github.com/yousysadmin/ihttp/internal/domain/automation"
+	"github.com/yousysadmin/ihttp/internal/domain/instance"
 	"github.com/yousysadmin/ihttp/internal/domain/intercept"
 	"github.com/yousysadmin/ihttp/internal/domain/project"
 	"github.com/yousysadmin/ihttp/internal/domain/protoschema"
@@ -37,6 +38,7 @@ type Deps struct {
 	Transfer   *transfer.Service
 	Schemas    *protoschema.Service
 	Upstreams  *upstreams.Service
+	Instance   *instance.Service
 	Rules      *rules.Service
 	CA         *certgen.Authority
 	Bus        *eventbus.Bus

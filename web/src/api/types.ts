@@ -597,3 +597,10 @@ export interface AutomationResult {
   body_binary: boolean
   body_size: number
 }
+
+// The instance's own settings, as against a project's: what holds on
+// this machine whichever project is open.
+export interface InstanceSettings {
+  // Header names to read as credentials on top of the built-in list.
+  auth_headers?: string[]
+}

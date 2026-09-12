@@ -25,6 +25,7 @@ import (
 	"github.com/yousysadmin/ihttp/internal/core/upstream"
 	"github.com/yousysadmin/ihttp/internal/database"
 	"github.com/yousysadmin/ihttp/internal/domain/automation"
+	"github.com/yousysadmin/ihttp/internal/domain/instance"
 	"github.com/yousysadmin/ihttp/internal/domain/intercept"
 	"github.com/yousysadmin/ihttp/internal/domain/project"
 	"github.com/yousysadmin/ihttp/internal/domain/protoschema"
@@ -321,6 +322,7 @@ func runServe(ctx context.Context, o serveOptions) error {
 			ClientCerts:    clientCerts.Summaries(),
 		},
 		Upstreams: ways,
+		Instance:  instance.NewService(instance.NewStore(db), log.With("svc", "instance")),
 		Rules:     ruleHook,
 	})
 

@@ -1,18 +1,20 @@
 <script setup lang="ts">
 // One HTTP message - a request or a response - as a tab bar over a
-// body pane: Body and Headers. Every page that shows a message shows
+// body pane: Body, Headers, Raw and Auth. Every page that shows a message shows
 // it this way, which is what stops the log and the intercept queue
 // rendering the same thing two ways. A page that switches between two
 // messages puts that switch in the `lead` slot, so both tab groups
 // share one strip instead of stacking.
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import type { Header } from '../api/types'
 import HeadersTable from './HeadersTable.vue'
-import CookieTables from './CookieTables.vue'
+import AuthView from './AuthView.vue'
 import RawMessage from './RawMessage.vue'
 import BodyView from './BodyView.vue'
 import TabStrip, { type TabItem } from './TabStrip.vue'
 import { contentType } from '../composables/http'
+import { credentialsOf } from '../composables/auth'
+import { useSettingsStore } from '../stores/settings'
 
 const props = defineProps<{
   headers: Header[]
@@ -46,12 +48,23 @@ const props = defineProps<{
   fill?: boolean
 }>()
 
-type Tab = 'body' | 'headers' | 'trailers' | 'raw'
+type Tab = 'body' | 'headers' | 'trailers' | 'raw' | 'auth'
 
 // Open on the body when there is one, else on the headers.
 const tab = ref<Tab>(props.body ? 'body' : 'headers')
 
 const ct = computed(() => contentType(props.headers))
+
+// The cookies and the credential headers, counted for the tab. The tab
+// is offered only when there is something on it, and what counts as a
+// credential header is the built-in list plus the instance's own.
+const settings = useSettingsStore()
+
+onMounted(() => {
+  settings.ensure()
+})
+
+const creds = computed(() => credentialsOf(props.headers, settings.authHeaders))
 
 const tabs = computed<TabItem[]>(() => {
   const out: TabItem[] = [
@@ -64,6 +77,10 @@ const tabs = computed<TabItem[]>(() => {
   if (props.startLine) {
     out.push({ id: 'raw', label: 'Raw' })
   }
+  if (creds.value.count) {
+    out.push({ id: 'auth', label: 'Auth', count: creds.value.count })
+  }
+
   return out
 })
 </script>
@@ -105,10 +122,8 @@ const tabs = computed<TabItem[]>(() => {
         :host="host"
       />
       <HeadersTable v-else-if="tab === 'trailers'" :headers="trailers ?? []" />
-      <template v-else>
-        <HeadersTable :headers="headers" />
-        <CookieTables :headers="headers" />
-      </template>
+      <AuthView v-else-if="tab === 'auth'" :headers="headers" />
+      <HeadersTable v-else :headers="headers" />
     </div>
   </div>
 </template>
