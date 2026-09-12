@@ -37,6 +37,7 @@ import (
 	"github.com/yousysadmin/ihttp/internal/proxy"
 	"github.com/yousysadmin/ihttp/internal/server"
 	"github.com/yousysadmin/ihttp/pkg"
+	"github.com/yousysadmin/ihttp/pkg/update"
 	"github.com/yousysadmin/ihttp/web"
 )
 
@@ -63,6 +64,8 @@ type serveOptions struct {
 	firefox     bool
 	browser     string
 	shutdownSec int
+
+	noUpdateCheck bool
 }
 
 func newServeCmd() *cobra.Command {
@@ -105,6 +108,7 @@ command line wins over the environment.`,
 	f.BoolVar(&o.chrome, "chrome", false, "same as --browser chrome")
 	f.BoolVar(&o.firefox, "firefox", false, "same as --browser firefox")
 	f.IntVar(&o.shutdownSec, "shutdown-timeout", 10, "seconds to wait for in-flight requests on exit")
+	f.BoolVar(&o.noUpdateCheck, "no-update-check", false, "do not ask GitHub on start whether a newer release exists")
 
 	return cmd
 }
@@ -365,6 +369,25 @@ func runServe(ctx context.Context, o serveOptions) error {
 	go listenAndServe("console", consoleSrv)
 
 	log.Info(fmt.Sprintf("%s %s is running", pkg.AppName, pkg.Version), "console", consoleURL, "proxy", proxyURL)
+
+	// A check, never an install: the line says what is out there and
+	// `ihttp update` is the only thing that writes a binary. It runs in
+	// the background, so a slow or unreachable GitHub never holds up a
+	// proxy that is already listening, and a failed check is a debug
+	// line - nobody started the proxy to find out about releases.
+	if !o.noUpdateCheck {
+		go func() {
+			res := update.CheckLatestVersion(ctx, pkg.Version)
+
+			switch {
+			case res.Err != nil:
+				log.Debug("could not check for a newer release", "err", res.Err)
+			case res.Available():
+				log.Info(fmt.Sprintf("%s v%s is available - running %s, install it with `%s update`",
+					pkg.AppName, res.LatestVersion, pkg.Version, pkg.AppName))
+			}
+		}()
+	}
 
 	if !web.Available() {
 		log.Warn("no console is built into this binary - the API is up, the pages are not")
