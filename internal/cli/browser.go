@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -41,6 +42,7 @@ func newBrowserCmd() *cobra.Command {
 				ProxyURL:   proxyURL,
 				OpenURL:    open,
 				CACertPath: firstNonEmpty(expandHome(caCert), filepath.Join(expandHome(dataDir), "ca.pem")),
+				Log:        slog.Default(),
 			})
 			if err != nil {
 				return err
@@ -53,16 +55,19 @@ func newBrowserCmd() *cobra.Command {
 				slog.Warn(res.Warning)
 			}
 
-			// Wait for the browser or for Ctrl+C, whichever comes first.
-			done := make(chan error, 1)
-			go func() { done <- res.Cmd.Wait() }()
-
+			// Wait for the browser or for Ctrl+C. On Ctrl+C the browser
+			// is told to quit, and the profile goes once it has.
 			select {
 			case <-ctx.Done():
-				return nil
-			case <-done:
-				return nil
+				select {
+				case <-res.Done:
+				case <-time.After(10 * time.Second):
+					slog.Warn("browser did not exit in time, its profile is left behind")
+				}
+			case <-res.Done:
 			}
+
+			return nil
 		},
 	}
 

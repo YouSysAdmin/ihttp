@@ -370,12 +370,17 @@ func runServe(ctx context.Context, o serveOptions) error {
 		log.Warn("no console is built into this binary - the API is up, the pages are not")
 	}
 
+	// browserDone is closed once a launched browser is gone, so the
+	// shutdown below can wait for it and its profile to be removed.
+	var browserDone <-chan struct{}
+
 	if kind != "" {
 		res, err := browser.Launch(ctx, browser.Options{
 			Kind:       kind,
 			ProxyURL:   proxyURL,
 			OpenURL:    consoleURL,
 			CACertPath: caCert,
+			Log:        log,
 		})
 
 		switch {
@@ -388,6 +393,8 @@ func runServe(ctx context.Context, o serveOptions) error {
 			if res.Warning != "" {
 				log.Warn(res.Warning)
 			}
+
+			browserDone = res.Done
 		}
 	}
 
@@ -416,6 +423,16 @@ func runServe(ctx context.Context, o serveOptions) error {
 		_ = proxySrv.Close()
 	} else {
 		log.Debug("proxy stopped")
+	}
+
+	// The browser was told to quit when ctx ended. Give it the rest of
+	// the shutdown window so its profile is removed before we exit.
+	if browserDone != nil {
+		select {
+		case <-browserDone:
+		case <-shutdownCtx.Done():
+			log.Warn("browser did not exit in time, its profile is left behind")
+		}
 	}
 
 	return nil

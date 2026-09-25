@@ -9,17 +9,28 @@
 package browser
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 )
+
+// maxStderrLines caps what is logged of a browser's own output. Chromium
+// prints a line for every warning it has, so the log keeps the start,
+// where a failure to launch is reported, and drains the rest.
+const maxStderrLines = 200
 
 // Kind is a browser family.
 type Kind string
@@ -65,6 +76,10 @@ type Options struct {
 	// when certutil is on the PATH. Chromium ignores certificate errors
 	// outright and does not need it.
 	CACertPath string
+
+	// Log gets the browser's own stderr at DEBUG and its exit at INFO.
+	// Nil means the slog default.
+	Log *slog.Logger
 }
 
 // Result reports what Launch did beyond starting the process.
@@ -81,6 +96,11 @@ type Result struct {
 	// Warning is advice for the operator when something was not possible
 	// - typically that Firefox could not be given the CA.
 	Warning string
+
+	// Done is closed once the browser has exited and a temporary profile
+	// is gone. Launch waits on the process itself, so Cmd.Wait must not
+	// be called again.
+	Done <-chan struct{}
 }
 
 func chromeCandidates() []string {
@@ -199,7 +219,7 @@ func Launch(ctx context.Context, opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	cmd := exec.CommandContext(ctx, bin, args...)
+	var env []string
 
 	if opts.Kind == KindFirefox {
 		// A release Firefox ignores services.settings.server unless this
@@ -207,7 +227,27 @@ func Launch(ctx context.Context, opts Options) (*Result, error) {
 		// dozen collections on every start. Nightly honours the pref on
 		// its own. Measured: nine requests to Mozilla with the pref alone,
 		// none with the variable beside it.
-		cmd.Env = append(os.Environ(), "MOZ_REMOTE_SETTINGS_DEVTOOLS=1")
+		env = append(env, "MOZ_REMOTE_SETTINGS_DEVTOOLS=1")
+	}
+
+	cmd := command(ctx, bin, args, env, opts.Kind, profile)
+
+	log := opts.Log
+	if log == nil {
+		log = slog.Default()
+	}
+
+	log = log.With("browser", string(opts.Kind))
+
+	// The browser's own complaints are the only account of why it did not
+	// come up, so they are read into the log rather than dropped.
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		if temp {
+			_ = os.RemoveAll(profile)
+		}
+
+		return nil, fmt.Errorf("browser: stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -218,14 +258,149 @@ func Launch(ctx context.Context, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("browser: start %s: %w", bin, err)
 	}
 
-	if temp {
-		go func() {
-			_ = cmd.Wait()
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		logStderr(log, stderr)
+
+		err := cmd.Wait()
+
+		if temp {
 			_ = os.RemoveAll(profile)
-		}()
+		}
+
+		switch {
+		case ctx.Err() != nil:
+			log.Debug("browser closed on shutdown", "pid", cmd.Process.Pid)
+		case err != nil:
+			log.Info("browser exited", "pid", cmd.Process.Pid, "err", err)
+		default:
+			log.Info("browser exited", "pid", cmd.Process.Pid)
+		}
+	}()
+
+	return &Result{Cmd: cmd, Binary: bin, Profile: profile, Warning: warning, Done: done}, nil
+}
+
+// command builds the process to start. Chromium and a Firefox outside an
+// app bundle run as a plain child. A Firefox in a macOS bundle is started
+// through open(1): run straight from the binary, Firefox 156 on macOS 27
+// refuses any -profile directory with "Profile Missing", even one it
+// could write, while the same arguments through LaunchServices load it.
+// open passes the environment and, with -W, lives as long as Firefox
+// does, so Wait still means the browser is gone. Cancelling ends
+// Firefox itself, found by its binary and profile, since a signal to
+// open would leave the browser running on a profile about to be removed.
+func command(ctx context.Context, bin string, args, env []string, kind Kind, profile string) *exec.Cmd {
+	bundle := macBundle(bin)
+
+	if kind != KindFirefox || bundle == "" {
+		cmd := exec.CommandContext(ctx, bin, args...)
+		if len(env) > 0 {
+			cmd.Env = append(os.Environ(), env...)
+		}
+
+		return cmd
 	}
 
-	return &Result{Cmd: cmd, Binary: bin, Profile: profile, Warning: warning}, nil
+	openArgs := []string{"-n", "-W", "-a", bundle}
+	for _, e := range env {
+		openArgs = append(openArgs, "--env", e)
+	}
+
+	openArgs = append(openArgs, "--args")
+	openArgs = append(openArgs, args...)
+
+	cmd := exec.CommandContext(ctx, "open", openArgs...)
+	cmd.Cancel = func() error {
+		if terminateByProfile(bin, profile) {
+			return nil
+		}
+
+		return cmd.Process.Kill()
+	}
+	cmd.WaitDelay = 5 * time.Second
+
+	return cmd
+}
+
+// macBundle returns the .app bundle bin lives in, or "" when it is not in
+// one or this is not macOS.
+func macBundle(bin string) string {
+	if runtime.GOOS != "darwin" {
+		return ""
+	}
+
+	const marker = ".app/Contents/MacOS/"
+
+	i := strings.Index(bin, marker)
+	if i < 0 {
+		return ""
+	}
+
+	return bin[:i+len(".app")]
+}
+
+// terminateByProfile sends TERM to every process running bin on profile
+// and reports whether it found one. Helper processes carry the profile
+// too but not as their first word, so the pattern is anchored on bin.
+func terminateByProfile(bin, profile string) bool {
+	pattern := "^" + regexp.QuoteMeta(bin) + " .*" + regexp.QuoteMeta(profile)
+
+	out, err := exec.Command("pgrep", "-f", pattern).Output()
+	if err != nil {
+		return false
+	}
+
+	found := false
+
+	for field := range strings.FieldsSeq(string(out)) {
+		pid, err := strconv.Atoi(field)
+		if err != nil {
+			continue
+		}
+
+		if p, err := os.FindProcess(pid); err == nil && p.Signal(syscall.SIGTERM) == nil {
+			found = true
+		}
+	}
+
+	return found
+}
+
+// logStderr writes the first maxStderrLines of r to the log at DEBUG and
+// reads the rest to EOF so the browser never blocks on a full pipe.
+func logStderr(log *slog.Logger, r io.Reader) {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, 64*1024), 64*1024)
+	n := 0
+
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+
+		n++
+		if n > maxStderrLines {
+			continue
+		}
+
+		log.Debug("browser stderr", "line", line)
+	}
+
+	// A line past the buffer stops the scanner. Drain what is left so
+	// the browser never blocks on a full pipe.
+	if err := sc.Err(); err != nil {
+		log.Debug("browser stderr", "err", err)
+		_, _ = io.Copy(io.Discard, r)
+	}
+
+	if n > maxStderrLines {
+		log.Debug("browser stderr truncated", "lines", n)
+	}
 }
 
 // prepareChrome seeds the profile and returns the flag set.
