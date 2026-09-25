@@ -6,6 +6,7 @@ ihttp cert       manage the CA certificate in the trust stores
 ihttp browser    launch a browser pointed at a running proxy
 ihttp env        print the proxy environment for a shell to evaluate
 ihttp mcp        serve the request log to an AI agent over MCP
+ihttp update     update to the latest release
 ihttp version    print the binary version
 ```
 
@@ -54,6 +55,7 @@ Bodies are never logged, at any level.
 | `--browser`             | none             | `chrome` or `firefox`, launched with a throwaway profile                                                      |
 | `--chrome`, `--firefox` | off              | the same, shorter                                                                                             |
 | `--shutdown-timeout`    | `10`             | seconds to wait for in-flight requests on exit                                                                |
+| `--no-update-check`     | off              | do not ask GitHub on start whether a newer release exists                                                     |
 
 Both `--ca-cert` and `--ca-key` are needed to bring your own CA. One
 without the other is refused rather than silently minting a new pair
@@ -107,6 +109,31 @@ found first.
 
 See [Routing traffic in](clients.md#a-shell-and-anything-started-from-it)
 for what it sets and why some things are left alone.
+
+## ihttp update
+
+```
+ihttp update           install the latest release
+ihttp update --check   only say whether a newer one exists
+```
+
+Downloads the latest release from GitHub and replaces this binary. The
+archive is verified against the release's `checksums.sha256` before
+anything is written, and the new binary is moved into place only once it
+is on disk beside the old one - a download that fails, or a checksum
+that does not match, leaves the working binary alone.
+
+A development build - a plain `go build`, which reports `devel` - has no
+version to compare against, so `--check` says so and a plain `update`
+installs the latest release.
+
+`serve` asks the same question on start and logs one line when a newer
+release exists; it never installs anything. `--no-update-check`, or
+`IHTTP_NO_UPDATE_CHECK=true`, turns that off.
+
+Installed through a package manager - Homebrew, a `.deb` - update through
+that instead: this writes over the file in place and the manager will not
+know.
 
 ## ihttp mcp
 

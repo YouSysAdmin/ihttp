@@ -31,6 +31,19 @@ task build          # console into web/dist, then bin/ihttp
 bin/ihttp serve
 ```
 
+A binary installed from an archive updates itself:
+
+```sh
+ihttp update           # install the latest release
+ihttp update --check   # only say whether a newer one exists
+```
+
+The download is checked against the release checksums before the binary
+is replaced. `serve` asks the same question on start and logs one line
+when a newer release exists, which `--no-update-check` (or
+`IHTTP_NO_UPDATE_CHECK=true`) turns off. Installed through Homebrew,
+update through Homebrew instead - see [Command line](docs/cli.md#ihttp-update).
+
 ## Getting started
 
 The proxy listens on `:6080` and the console on `http://127.0.0.1:6081`.
@@ -106,6 +119,7 @@ Every flag is also an environment variable: `--proxy-addr` is
 | `--no-upstream-proxy`           | none             | host globs reached directly, `*.internal` - localhost always is                                 |
 | `--client-cert`                 | none             | present a client certificate to an upstream that asks: `<host glob>=<cert>[,<key>]`, repeatable |
 | `--shutdown-timeout`            | `10`             | seconds to wait for in-flight requests on exit                                                  |
+| `--no-update-check`             | off              | do not ask GitHub on start whether a newer release exists                                       |
 
 Logging flags work on every command, not only `serve`:
 

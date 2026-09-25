@@ -48,6 +48,7 @@ func NewRoot() *cobra.Command {
 	root.AddCommand(newBrowserCmd())
 	root.AddCommand(newEnvCmd())
 	root.AddCommand(newMCPCmd())
+	root.AddCommand(newUpdateCmd())
 	root.AddCommand(newVersionCmd())
 
 	return root
